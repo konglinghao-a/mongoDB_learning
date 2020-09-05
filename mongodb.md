@@ -209,7 +209,7 @@ db.movies.find({ "title": /^B/ }) # 按照正则表达式查找
 ```shell
 db.fruit.insertOne({
 	name: "apple",
-	from: {
+	from: { # 定义了子文档（感觉跟对象差不多）
 		country: "China",
 		province: "Guangdong"
 	}
@@ -219,9 +219,166 @@ db.fruit.insertOne({
 - 考虑以下查询的意义：
 
 ```shell
+# 下面这句话的意思是，要查一个子文档 from.country
 db.fruit.find({ "from.country": "China" })
+# 下面这句话的意思是，我要查一个 from 字段；所以要查子文档的时候不能这么写 
 db.fruit.find({ "from": { country: "China" } })
 ```
 
+### 使用 find 搜索数组
 
+- find 支持对数组中的元素进行搜索。假设有一个文档：
+
+```shell
+db.fruit.insert([
+	{ 
+		"name": "Apple",
+		color: ["red", "green"]
+	},
+	{ 
+		"name": "Mongo",
+		color: ["yellow", "green"]
+	},
+])
+```
+
+- 考虑以下查询的意义：
+
+```shell
+# 下面的语句都用来查询数组中包含对应元素的信息
+db.fruit.find({ color : "red" })
+db.fruit.find({ $or: [{ color: "red" }, { color: "yellow" } ] })
+```
+
+### 使用 find 搜索数组中的对象
+
+- 考虑以下文档，在其中搜索
+
+```shell
+db.movies.insertOne({
+	"title": "Raiders of the Lost Ark",
+	"filming_locations": [
+		{
+			"city": "Los Angeles",
+			"state": "CA",
+			"country": "USA"
+		},
+		{
+			"city": "Rome",
+			"state": "Lazio",
+			"country": "Italy"
+		},
+		{
+			"city": "Florence",
+			"state": "SC",
+			"country": "USA"
+		}
+	]
+})
+```
+
+```SHELL
+# 查询城市是 Rome 的记录
+db.movies.find({ "filming_locations.city": "Rome" })
+```
+
+- 在数组中搜索子对象的多个字段时，如果使用 $elemMatch，它表示必须是同一个子对象满足多个条件：
+
+```shell
+db.getCollection('movies').find({
+	"filming_locations.city": "Rome",
+	"filming_locations.country": "USA"
+})
+
+db.getCollection('movies').find({
+	"filming_locations": {
+		$elemMatch: {
+			"city": "Rome",
+			"country": "USA"
+		}
+	}
+})
+```
+
+### 控制 find 返回的字段
+
+- find 可以指定只返回指定的字段；
+- _id 字段必须明确指明不返回，否则默认返回；
+- 在 MongoDB 中我们称为这为投影（projection）；
+- db.movies.find({ "category": "action" }, { "_id": 0, title: 1 })，后面的对象的意思就是，不返回 _id，返回 title
+
+## 4-2 使用 remove 删除文档
+
+- remove 命令需要配合查询条件使用；
+- 匹配查询条件的文档会被删除；
+- 指定一个空文档条件会删除所有文档；
+- 示例：
+
+```shell
+db.testcol.remove({ a: 1 }) # 删除 a 等于 1 的记录
+db.testcol.remove({ a: { $lt: 5 } }) # 删除 a 小于 5 的记录
+db.testcol.remove({}) # 删除所有记录
+db.testcol.remove() #报错
+```
+
+## 4-3 使用 update 更新文档
+
+- Update 操作执行格式： db.<集合>.update(<查询条件>, <更新字段>)
+- 以以下数据为例：
+
+```shell
+db.fruit.insertMany([
+	{ name: "apple" },
+	{ name: "pear" },
+	{ name: "orange" }
+])
+
+db.fruit.updateOne({ name: "apple" }, { $set: { from: "China" } }) # 查询 name 为 apple 的记录，将找到记录的 from 设置为 China
+```
+
+- 使用 updateOne 表示无论条件匹配多少条记录，始终只更新第一条；
+- 使用 updateMany 表示条件匹配多少条就更新多少条；
+- updateOne/updateMany 方法要求更新条件部分必须具有以下之一，否则将会报错。
+  - $set/$unset
+  - $push/$pushAll/$pop
+  - $pull/$pullAll
+  - $addToSet
+- 报错：
+
+```shell
+db.fruit.updateOne({ name: "apple" }, { from: "China" })
+```
+
+### 各操作符的概念
+
+| 操作符    | 意思                                     |
+| --------- | ---------------------------------------- |
+| $push     | 增加一个对象到数组底部                   |
+| $pushAll  | 增加多个对象到数组底部                   |
+| $pop      | 从数组底部删除一个对象                   |
+| $pull     | 如果匹配指定的值，从数组中删除相应的对象 |
+| $pullAll  | 如果匹配任意的值，从数据中删除相应的对象 |
+| $addToSet | 如果不存在则增加一个值到数组             |
+
+## 4-4 使用 drop 删除集合
+
+- 使用 db.<集合>.drop() 来删除一个集合
+- 集合中的全部文档都会被删除
+- 集合相关的索引也会被删除
+
+```
+db.coToBeDropped.drop()
+```
+
+## 4-5 使用 dropDatabase 删除数据库
+
+- 使用 db.dropDatabase() 来删除数据库
+- 数据库相应文件也会被删除，磁盘空间将被释放
+
+```shell
+use tempDB
+db.dropDatabase()
+show collections # No collections
+show dbs # The db is gone
+```
 
